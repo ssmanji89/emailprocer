@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  emailbot-app:
+    build: .
+    container_name: emailbot-app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://emailbot:${DB_PASSWORD}@emailbot-postgres:5432/emailbot
+      - REDIS_URL=redis://emailbot-redis:6379/0
+      - EMAILBOT_M365_TENANT_ID=${EMAILBOT_M365_TENANT_ID}
+      - EMAILBOT_M365_CLIENT_ID=${EMAILBOT_M365_CLIENT_ID}
+      - EMAILBOT_M365_CLIENT_SECRET=${EMAILBOT_M365_CLIENT_SECRET}
+      - EMAILBOT_TARGET_MAILBOX=${EMAILBOT_TARGET_MAILBOX}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      - emailbot-postgres
+      - emailbot-redis
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - emailbot-network
+
+  emailbot-postgres:
+    image: postgres:15-alpine
+    container_name: emailbot-postgres
+    environment:
+      - POSTGRES_DB=emailbot
+      - POSTGRES_USER=emailbot
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5432:5432"
+    volumes:
+      - emailbot_postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    restart: unless-stopped
+    networks:
+      - emailbot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emailbot -d emailbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  emailbot-redis:
+    image: redis:7-alpine
+    container_name: emailbot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - emailbot_redis_data:/data
+    restart: unless-stopped
+    networks:
+      - emailbot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+
+  emailbot-monitoring:
+    image: prom/prometheus:latest
+    container_name: emailbot-monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - emailbot_prometheus_data:/prometheus
+    restart: unless-stopped
+    networks:
+      - emailbot-network
+    depends_on:
+      - emailbot-app
+
+volumes:
+  emailbot_postgres_data:
+    driver: local
+  emailbot_redis_data:
+    driver: local
+  emailbot_prometheus_data:
+    driver: local
+
+networks:
+  emailbot-network:
+    driver: bridge 
