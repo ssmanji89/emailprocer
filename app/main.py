@@ -12,6 +12,8 @@ from app.config.settings import settings
 from app.utils.graph_auth import auth_manager
 from app.integrations.m365_client import email_client
 from app.core.llm_service import llm_service
+from app.services.email_processor import email_processor
+from app.services.teams_manager import teams_manager
 
 # Configure logging
 logging.basicConfig(
@@ -114,6 +116,30 @@ async def health_check():
                 health_status["status"] = "degraded"
         except Exception as e:
             health_status["components"]["llm_service"] = f"error: {str(e)}"
+            health_status["status"] = "degraded"
+        
+        # Test email processor pipeline
+        try:
+            pipeline_status = await email_processor.validate_processing_pipeline()
+            if pipeline_status["status"] == "healthy":
+                health_status["components"]["email_processor"] = "healthy"
+            else:
+                health_status["components"]["email_processor"] = "degraded"
+                health_status["status"] = "degraded"
+        except Exception as e:
+            health_status["components"]["email_processor"] = f"error: {str(e)}"
+            health_status["status"] = "degraded"
+        
+        # Test Teams manager
+        try:
+            teams_test = await teams_manager.test_connectivity()
+            if teams_test["status"] == "success":
+                health_status["components"]["teams_manager"] = "healthy"
+            else:
+                health_status["components"]["teams_manager"] = "unhealthy"
+                health_status["status"] = "degraded"
+        except Exception as e:
+            health_status["components"]["teams_manager"] = f"error: {str(e)}"
             health_status["status"] = "degraded"
         
         return health_status
@@ -220,22 +246,94 @@ async def trigger_email_processing(background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/process/immediate")
+async def process_emails_immediate():
+    """Process emails immediately and return results."""
+    try:
+        logger.info("Starting immediate email processing")
+        result = await email_processor.process_new_emails()
+        
+        return {
+            "status": "completed",
+            "processing_result": result,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Immediate email processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/process/status")
 async def get_processing_status():
     """Get current processing status and statistics."""
     try:
-        # This would typically fetch from database/cache
-        # For now, return basic status
+        # Get processing statistics from email processor
+        stats = email_processor.get_processing_statistics()
+        
         return {
             "status": "ready",
-            "last_processing": None,
-            "emails_processed_today": 0,
-            "current_queue_size": 0,
+            "processing_statistics": stats,
             "timestamp": datetime.utcnow().isoformat()
         }
         
     except Exception as e:
         logger.error(f"Failed to get processing status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/process/statistics")
+async def get_detailed_statistics():
+    """Get detailed processing and escalation statistics."""
+    try:
+        processing_stats = email_processor.get_processing_statistics()
+        escalation_stats = teams_manager.get_escalation_statistics()
+        
+        return {
+            "processing": processing_stats,
+            "escalations": escalation_stats,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get detailed statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/escalations/active")
+async def get_active_escalations():
+    """Get list of currently active escalation teams."""
+    try:
+        escalations = await teams_manager.list_active_escalations()
+        
+        return {
+            "status": "success",
+            "active_escalations": escalations,
+            "count": len(escalations),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get active escalations: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/escalations/{team_id}/resolve")
+async def resolve_escalation(team_id: str, resolution_notes: str):
+    """Mark an escalation as resolved."""
+    try:
+        success = await teams_manager.resolve_escalation(team_id, resolution_notes)
+        
+        if success:
+            return {
+                "status": "resolved",
+                "team_id": team_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Failed to resolve escalation")
+            
+    except Exception as e:
+        logger.error(f"Failed to resolve escalation {team_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -307,40 +405,19 @@ async def validate_configuration():
 
 
 async def process_emails_background():
-    """Background task for processing emails."""
+    """Background task for processing emails using the complete pipeline."""
     try:
         logger.info("Starting background email processing")
         
-        # Fetch new emails
-        emails = await email_client.fetch_new_emails()
+        # Use the email processor pipeline for complete processing
+        result = await email_processor.process_new_emails()
         
-        if not emails:
-            logger.info("No new emails to process")
-            return
+        logger.info(f"Background email processing completed: {result['emails_processed']} processed")
         
-        logger.info(f"Processing {len(emails)} new emails")
-        
-        for email in emails:
-            try:
-                # Classify email using LLM
-                classification = await llm_service.classify_email(email)
-                
-                logger.info(f"Email {email.id} classified as {classification.category} "
-                           f"with {classification.confidence}% confidence")
-                
-                # TODO: Implement routing logic based on confidence
-                # TODO: Implement escalation for low confidence emails
-                # TODO: Implement automated responses for high confidence emails
-                # TODO: Update database with processing results
-                
-                # Mark email as read for now
-                await email_client.mark_as_read(email.id)
-                
-            except Exception as e:
-                logger.error(f"Error processing email {email.id}: {str(e)}")
-                continue
-        
-        logger.info("Background email processing completed")
+        if result.get('errors'):
+            logger.warning(f"Processing completed with {len(result['errors'])} errors")
+            for error in result['errors']:
+                logger.error(f"Processing error: {error}")
         
     except Exception as e:
         logger.error(f"Background email processing failed: {str(e)}")

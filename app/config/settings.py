@@ -91,6 +91,15 @@ class Settings(BaseSettings):
         env="TEAMS_DEFAULT_MEMBERS"
     )
     
+    # Team Member Email Mappings
+    default_it_admin_email: str = Field(default="smanji@zgcompanies.com", env="DEFAULT_IT_ADMIN_EMAIL")
+    default_helpdesk_email: str = Field(default="helpdesk@zgcompanies.com", env="DEFAULT_HELPDESK_EMAIL")
+    default_system_admin_email: str = Field(default="sysadmin@zgcompanies.com", env="DEFAULT_SYSTEM_ADMIN_EMAIL")
+    default_network_admin_email: str = Field(default="network@zgcompanies.com", env="DEFAULT_NETWORK_ADMIN_EMAIL")
+    default_security_admin_email: str = Field(default="security@zgcompanies.com", env="DEFAULT_SECURITY_ADMIN_EMAIL")
+    default_procurement_email: str = Field(default="procurement@zgcompanies.com", env="DEFAULT_PROCUREMENT_EMAIL")
+    default_it_manager_email: str = Field(default="smanji@zgcompanies.com", env="DEFAULT_IT_MANAGER_EMAIL")
+    
     # Rate Limiting Configuration
     rate_limit_requests: int = Field(default=100, env="RATE_LIMIT_REQUESTS")
     rate_limit_window: int = Field(default=60, env="RATE_LIMIT_WINDOW")
