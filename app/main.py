@@ -14,6 +14,7 @@ from app.integrations.m365_client import email_client
 from app.core.llm_service import llm_service
 from app.services.email_processor import email_processor
 from app.services.teams_manager import teams_manager
+from app.services.database_service import database_service
 
 # Configure logging
 logging.basicConfig(
@@ -140,6 +141,19 @@ async def health_check():
                 health_status["status"] = "degraded"
         except Exception as e:
             health_status["components"]["teams_manager"] = f"error: {str(e)}"
+            health_status["status"] = "degraded"
+        
+        # Test database service
+        try:
+            db_health = await database_service.health_check()
+            if db_health["status"] == "healthy":
+                health_status["components"]["database"] = "healthy"
+                health_status["components"]["database_details"] = db_health["tables"]
+            else:
+                health_status["components"]["database"] = "unhealthy"
+                health_status["status"] = "degraded"
+        except Exception as e:
+            health_status["components"]["database"] = f"error: {str(e)}"
             health_status["status"] = "degraded"
         
         return health_status
@@ -402,6 +416,219 @@ async def validate_configuration():
     except Exception as e:
         logger.error(f"Configuration validation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/dashboard")
+async def get_dashboard_analytics():
+    """Get comprehensive dashboard analytics."""
+    try:
+        dashboard_data = await database_service.get_dashboard_data()
+        
+        return {
+            "status": "success",
+            "data": dashboard_data,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get dashboard analytics: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@app.get("/analytics/processing")
+async def get_processing_analytics(days: int = 7):
+    """Get processing performance analytics."""
+    try:
+        async with database_service.get_session() as session:
+            processing_stats = await database_service.processing_repo.get_processing_statistics(days)
+            
+        return {
+            "status": "success",
+            "data": processing_stats,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get processing analytics: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@app.get("/analytics/classification")
+async def get_classification_analytics():
+    """Get email classification analytics."""
+    try:
+        async with database_service.get_session() as session:
+            classification_stats = await database_service.classification_repo.get_classification_statistics()
+            
+        return {
+            "status": "success",
+            "data": classification_stats,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get classification analytics: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@app.get("/analytics/patterns")
+async def get_pattern_analytics(min_frequency: int = 5, min_automation_potential: float = 70.0):
+    """Get email pattern analytics and automation opportunities."""
+    try:
+        async with database_service.get_session() as session:
+            automation_candidates = await database_service.pattern_repo.get_automation_candidates(
+                min_frequency, min_automation_potential
+            )
+            
+        patterns_data = [
+            {
+                "pattern_id": pattern.pattern_id,
+                "pattern_type": pattern.pattern_type,
+                "description": pattern.description,
+                "frequency": pattern.frequency,
+                "automation_potential": pattern.automation_potential,
+                "first_seen": pattern.first_seen.isoformat(),
+                "last_seen": pattern.last_seen.isoformat(),
+                "time_savings_potential_minutes": pattern.time_savings_potential_minutes
+            }
+            for pattern in automation_candidates
+        ]
+        
+        return {
+            "status": "success",
+            "data": {
+                "automation_candidates": patterns_data,
+                "total_candidates": len(patterns_data),
+                "criteria": {
+                    "min_frequency": min_frequency,
+                    "min_automation_potential": min_automation_potential
+                }
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get pattern analytics: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@app.get("/emails/history")
+async def get_email_history(sender: str = None, days: int = 30, limit: int = 50):
+    """Get email processing history."""
+    try:
+        async with database_service.get_session() as session:
+            if sender:
+                emails = await database_service.email_repo.get_emails_by_sender(sender, limit)
+            else:
+                start_date = datetime.utcnow() - timedelta(days=days)
+                end_date = datetime.utcnow()
+                emails = await database_service.email_repo.get_emails_by_date_range(start_date, end_date)
+                emails = emails[:limit]  # Limit results
+        
+        emails_data = [
+            {
+                "id": email.id,
+                "sender_email": email.sender_email,
+                "sender_name": email.sender_name,
+                "subject": email.subject,
+                "received_datetime": email.received_datetime.isoformat(),
+                "processed_datetime": email.processed_datetime.isoformat() if email.processed_datetime else None,
+                "processing_status": email.processing_status,
+                "is_processed": email.is_processed,
+                "processing_duration_seconds": email.processing_duration_seconds
+            }
+            for email in emails
+        ]
+        
+        return {
+            "status": "success",
+            "data": {
+                "emails": emails_data,
+                "total_count": len(emails_data),
+                "filters": {
+                    "sender": sender,
+                    "days": days,
+                    "limit": limit
+                }
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get email history: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+
+@app.post("/analytics/feedback")
+async def add_classification_feedback(email_id: str, feedback: str, notes: str = None):
+    """Add human feedback to email classification."""
+    try:
+        async with database_service.get_session() as session:
+            success = await database_service.classification_repo.add_human_feedback(
+                email_id, feedback, notes
+            )
+            
+        if success:
+            return {
+                "status": "success",
+                "message": f"Feedback '{feedback}' added to email {email_id}",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "status": "error",
+                    "error": f"Email {email_id} not found or feedback could not be added",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to add feedback for email {email_id}: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
 
 
 async def process_emails_background():

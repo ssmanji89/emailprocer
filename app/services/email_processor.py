@@ -14,6 +14,7 @@ from app.core.llm_service import LLMService
 from app.core.security import SecurityService
 from app.utils.rate_limiter import RateLimiter
 from app.config.settings import settings
+from app.services.database_service import database_service
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +157,10 @@ class EmailProcessingPipeline:
             else:
                 await self._handle_manual_review(email, classification, result)
             
-            # Step 5: Mark email as processed
+            # Step 5: Store results in database
+            await self._store_processing_results(email, classification, result)
+            
+            # Step 6: Mark email as processed
             await self.m365_client.mark_as_read(email.id)
             
             result.status = ProcessingStatus.COMPLETED
@@ -362,6 +366,38 @@ class EmailProcessingPipeline:
                 "escalate_review": self.thresholds.escalate_review
             }
         }
+    
+    async def _store_processing_results(self, email: EmailMessage, 
+                                      classification: ClassificationResult, 
+                                      result: ProcessingResult) -> None:
+        """Store complete processing results in database."""
+        try:
+            processing_data = {
+                "action_taken": result.action_taken,
+                "response_sent": result.response_sent,
+                "escalation_id": result.escalation_id,
+                "processing_time_ms": result.processing_time_ms,
+                "model_info": {
+                    "model": "gpt-4",
+                    "version": "2024-02-01",
+                    "prompt_version": "1.0",
+                    "tokens": getattr(classification, 'tokens_used', 0)
+                }
+            }
+            
+            # Store in database using the database service
+            success = await database_service.store_email_processing_complete(
+                email, classification, processing_data
+            )
+            
+            if success:
+                logger.info(f"Successfully stored processing results for email {email.id}")
+            else:
+                logger.warning(f"Failed to store processing results for email {email.id}")
+                
+        except Exception as e:
+            logger.error(f"Error storing processing results for email {email.id}: {str(e)}")
+            # Don't fail the entire processing pipeline for database errors
     
     async def validate_processing_pipeline(self) -> Dict[str, Any]:
         """Validate all components of the processing pipeline."""

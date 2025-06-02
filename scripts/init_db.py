@@ -15,7 +15,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config.database import init_database, close_database, Base, engine
 from app.config.settings import settings
-from app.models.email_models import *  # Import all models to register them
+from app.models.email_models import *  # Import Pydantic models
+from app.models.database_models import *  # Import SQLAlchemy models
+from app.models.security_models import *  # Import security models
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
