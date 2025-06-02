@@ -4,7 +4,8 @@ from typing import AsyncGenerator, Dict, Any, Optional
 from contextlib import asynccontextmanager
 
 from sqlalchemy import MetaData, create_engine
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.pool import StaticPool, QueuePool
 from sqlalchemy.orm import sessionmaker
@@ -21,7 +22,7 @@ Base = declarative_base(metadata=metadata)
 
 # Global database engine and session maker
 engine: Optional[Any] = None
-async_session_maker: Optional[async_sessionmaker] = None
+async_session_maker: Optional[sessionmaker] = None
 
 
 def get_engine_config() -> Dict[str, Any]:
@@ -69,7 +70,7 @@ async def init_database() -> None:
         engine = create_async_engine(**engine_config)
         
         # Create session maker
-        async_session_maker = async_sessionmaker(
+        async_session_maker = sessionmaker(
             bind=engine,
             class_=AsyncSession,
             expire_on_commit=False,

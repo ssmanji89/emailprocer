@@ -114,7 +114,23 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v):
         """Parse CORS origins from string or list."""
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+    
+    @field_validator("cors_allow_methods", mode="before")
+    @classmethod
+    def parse_cors_methods(cls, v):
+        """Parse CORS methods from string or list."""
+        if isinstance(v, str):
+            return [method.strip() for method in v.split(",") if method.strip()]
+        return v
+    
+    @field_validator("cors_allow_headers", mode="before")
+    @classmethod
+    def parse_cors_headers(cls, v):
+        """Parse CORS headers from string or list."""
+        if isinstance(v, str):
+            return [header.strip() for header in v.split(",") if header.strip()]
         return v
     
     @field_validator("teams_default_members", mode="before")
@@ -134,7 +150,7 @@ class Settings(BaseSettings):
         return v
     
     class Config:
-        env_file = ["test.env", ".env"]
+        env_file = ["test_local.env", "test.env", ".env"]
         env_file_encoding = "utf-8"
         case_sensitive = False
         
