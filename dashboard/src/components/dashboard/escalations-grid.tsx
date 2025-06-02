@@ -16,7 +16,6 @@ import {
   ArrowDown,
   Eye,
   RefreshCw,
-  MessageSquare,
   Timer,
 } from 'lucide-react'
 
@@ -80,7 +79,6 @@ export function EscalationsGrid({
   escalations,
   isLoading,
   onEscalationSelect,
-  onRefetch
 }: EscalationsGridProps) {
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
@@ -98,8 +96,8 @@ export function EscalationsGrid({
     if (!escalations.length) return []
     
     return [...escalations].sort((a, b) => {
-      let aValue: any = a[sortField]
-      let bValue: any = b[sortField]
+      let aValue: string | number = a[sortField as keyof Escalation] as string | number
+      let bValue: string | number = b[sortField as keyof Escalation] as string | number
       
       if (sortField === 'created_at' || sortField === 'sla_due_at') {
         aValue = new Date(aValue).getTime()

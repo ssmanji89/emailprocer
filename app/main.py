@@ -2,11 +2,12 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.config.settings import settings
 from app.utils.graph_auth import auth_manager
@@ -15,6 +16,11 @@ from app.core.llm_service import llm_service
 from app.services.email_processor import email_processor
 from app.services.teams_manager import teams_manager
 from app.services.database_service import database_service
+from app.services.monitoring_service import monitoring_service, performance_metrics
+from app.core.enhanced_security import (
+    api_key_manager, audit_logger, access_control, 
+    security_validator, SecurityException
+)
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +29,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Security
+security = HTTPBearer()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,6 +70,85 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
+
+# Security middleware
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """Security middleware for request validation and audit logging."""
+    start_time = datetime.utcnow()
+    client_ip = request.client.host
+    
+    try:
+        # Skip security for health endpoints
+        if request.url.path in ["/", "/health", "/health/detailed"]:
+            response = await call_next(request)
+            return response
+        
+        # Validate API key for protected endpoints
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+        
+        api_key = auth_header.split(" ")[1]
+        
+        try:
+            user_info = await api_key_manager.validate_api_key(api_key)
+            request.state.user = user_info
+            
+            # Log successful authentication
+            await audit_logger.log_authentication_event(
+                event_type="API_ACCESS",
+                user_id=user_info["user_id"],
+                success=True,
+                source_ip=client_ip,
+                additional_details={"endpoint": request.url.path, "method": request.method}
+            )
+            
+        except SecurityException as e:
+            # Log failed authentication
+            await audit_logger.log_authentication_event(
+                event_type="API_ACCESS",
+                user_id=None,
+                success=False,
+                source_ip=client_ip,
+                additional_details={"error": str(e), "endpoint": request.url.path}
+            )
+            raise HTTPException(status_code=401, detail=str(e))
+        
+        response = await call_next(request)
+        
+        # Log data access
+        processing_time = (datetime.utcnow() - start_time).total_seconds()
+        await audit_logger.log_data_access(
+            user_id=user_info["user_id"],
+            resource=request.url.path,
+            action=request.method,
+            success=response.status_code < 400,
+            source_ip=client_ip
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Security middleware error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal security error")
+
+
+def require_permission(permission: str):
+    """Dependency to require specific permission."""
+    def check_permission(request: Request):
+        if not hasattr(request.state, 'user'):
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        user_permissions = request.state.user.get("permissions", [])
+        if not access_control.check_permission(user_permissions, permission):
+            raise HTTPException(status_code=403, detail=f"Permission required: {permission}")
+        
+        return request.state.user
+    
+    return check_permission
 
 
 @app.get("/")
@@ -236,40 +323,232 @@ async def detailed_health_check():
         return JSONResponse(
             status_code=500,
             content={
-                "status": "error",
+                "status": "unhealthy",
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
 
 
+# Monitoring Endpoints
+@app.get("/monitoring/status")
+async def get_monitoring_status(user: dict = Depends(require_permission("read:system"))):
+    """Get current monitoring status and recent alerts."""
+    try:
+        monitoring_result = await monitoring_service.run_monitoring_cycle()
+        return {
+            "status": "success",
+            "monitoring_result": monitoring_result,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Monitoring status check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/monitoring/metrics")
+async def get_performance_metrics(
+    hours: int = 24,
+    user: dict = Depends(require_permission("read:analytics"))
+):
+    """Get performance metrics and KPIs."""
+    try:
+        kpi_summary = await performance_metrics.get_kpi_summary(hours)
+        return {
+            "status": "success",
+            "metrics": kpi_summary,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Performance metrics retrieval failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/monitoring/alert-test")
+async def test_alert_system(user: dict = Depends(require_permission("manage:system"))):
+    """Test the alert system by sending a test alert."""
+    try:
+        from app.services.monitoring_service import Alert, AlertSeverity
+        
+        test_alert = Alert(
+            severity=AlertSeverity.INFO,
+            component="Test System",
+            message="This is a test alert from the monitoring system",
+            details={"test": True, "triggered_by": user["user_id"]},
+            timestamp=datetime.utcnow()
+        )
+        
+        await monitoring_service._send_alert(test_alert)
+        
+        return {
+            "status": "success",
+            "message": "Test alert sent successfully",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Alert test failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Security Management Endpoints
+@app.post("/security/api-keys")
+async def create_api_key(
+    user_id: str,
+    permissions: List[str],
+    expires_days: int = 90,
+    user: dict = Depends(require_permission("manage:users"))
+):
+    """Create a new API key."""
+    try:
+        # Validate permissions
+        valid_permissions = []
+        for role, role_perms in access_control.permissions.items():
+            valid_permissions.extend(role_perms)
+        
+        for perm in permissions:
+            if perm not in valid_permissions:
+                raise HTTPException(status_code=400, detail=f"Invalid permission: {perm}")
+        
+        api_key_data = api_key_manager.generate_api_key(user_id, permissions, expires_days)
+        
+        # Log API key creation
+        await audit_logger.log_security_event(
+            event_type="API_KEY_CREATED",
+            user_id=user["user_id"],
+            details={
+                "target_user": user_id,
+                "permissions": permissions,
+                "key_id": api_key_data["key_id"]
+            },
+            severity="INFO"
+        )
+        
+        return {
+            "status": "success",
+            "api_key_data": api_key_data,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"API key creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/security/api-keys/{key_id}")
+async def revoke_api_key(
+    key_id: str,
+    reason: str = "Manual revocation",
+    user: dict = Depends(require_permission("manage:users"))
+):
+    """Revoke an API key."""
+    try:
+        success = await api_key_manager.revoke_api_key(key_id, reason)
+        
+        if success:
+            # Log API key revocation
+            await audit_logger.log_security_event(
+                event_type="API_KEY_REVOKED",
+                user_id=user["user_id"],
+                details={
+                    "key_id": key_id,
+                    "reason": reason
+                },
+                severity="WARNING"
+            )
+            
+            return {
+                "status": "success",
+                "message": f"API key {key_id} revoked successfully",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=404, detail="API key not found")
+            
+    except Exception as e:
+        logger.error(f"API key revocation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/security/audit-logs")
+async def get_audit_logs(
+    hours: int = 24,
+    severity: str = None,
+    user: dict = Depends(require_permission("view:audit_logs"))
+):
+    """Get audit logs."""
+    try:
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(hours=hours)
+        
+        logs = await database_service.get_audit_logs(start_time, end_time, severity)
+        
+        return {
+            "status": "success",
+            "logs": logs,
+            "time_range": {
+                "start": start_time.isoformat(),
+                "end": end_time.isoformat(),
+                "hours": hours
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Audit log retrieval failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/security/validate-content")
+async def validate_content(
+    content: str,
+    user: dict = Depends(require_permission("write:emails"))
+):
+    """Validate content for security threats."""
+    try:
+        # Sanitize input
+        sanitized_content = security_validator.sanitize_user_input(content)
+        
+        # Validate for security threats
+        validation_result = security_validator.validate_email_content(content)
+        
+        return {
+            "status": "success",
+            "validation_result": validation_result,
+            "sanitized_content": sanitized_content,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Content validation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/process/trigger")
-async def trigger_email_processing(background_tasks: BackgroundTasks):
-    """Manually trigger email processing."""
+async def trigger_email_processing(
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_permission("write:emails"))
+):
+    """Trigger immediate email processing."""
     try:
         background_tasks.add_task(process_emails_background)
-        
         return {
             "status": "triggered",
             "message": "Email processing started in background",
             "timestamp": datetime.utcnow().isoformat()
         }
-        
     except Exception as e:
         logger.error(f"Failed to trigger email processing: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/process/immediate")
-async def process_emails_immediate():
+async def process_emails_immediate(user: dict = Depends(require_permission("write:emails"))):
     """Process emails immediately and return results."""
     try:
-        logger.info("Starting immediate email processing")
-        result = await email_processor.process_new_emails()
-        
+        processing_result = await email_processor.process_all_emails()
         return {
             "status": "completed",
-            "processing_result": result,
+            "result": processing_result,
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
@@ -278,38 +557,32 @@ async def process_emails_immediate():
 
 
 @app.get("/process/status")
-async def get_processing_status():
-    """Get current processing status and statistics."""
+async def get_processing_status(user: dict = Depends(require_permission("read:emails"))):
+    """Get current email processing status."""
     try:
-        # Get processing statistics from email processor
-        stats = email_processor.get_processing_statistics()
-        
+        status = await email_processor.get_processing_status()
         return {
-            "status": "ready",
-            "processing_statistics": stats,
+            "status": "success",
+            "processing_status": status,
             "timestamp": datetime.utcnow().isoformat()
         }
-        
     except Exception as e:
         logger.error(f"Failed to get processing status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/process/statistics")
-async def get_detailed_statistics():
-    """Get detailed processing and escalation statistics."""
+async def get_detailed_statistics(user: dict = Depends(require_permission("read:analytics"))):
+    """Get detailed processing statistics."""
     try:
-        processing_stats = email_processor.get_processing_statistics()
-        escalation_stats = teams_manager.get_escalation_statistics()
-        
+        stats = await database_service.get_processing_statistics()
         return {
-            "processing": processing_stats,
-            "escalations": escalation_stats,
+            "status": "success",
+            "statistics": stats,
             "timestamp": datetime.utcnow().isoformat()
         }
-        
     except Exception as e:
-        logger.error(f"Failed to get detailed statistics: {str(e)}")
+        logger.error(f"Failed to get processing statistics: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -632,31 +905,15 @@ async def add_classification_feedback(email_id: str, feedback: str, notes: str =
 
 
 async def process_emails_background():
-    """Background task for processing emails using the complete pipeline."""
+    """Background task for processing emails."""
     try:
         logger.info("Starting background email processing")
-        
-        # Use the email processor pipeline for complete processing
-        result = await email_processor.process_new_emails()
-        
-        logger.info(f"Background email processing completed: {result['emails_processed']} processed")
-        
-        if result.get('errors'):
-            logger.warning(f"Processing completed with {len(result['errors'])} errors")
-            for error in result['errors']:
-                logger.error(f"Processing error: {error}")
-        
+        result = await email_processor.process_all_emails()
+        logger.info(f"Background processing completed: {result}")
     except Exception as e:
         logger.error(f"Background email processing failed: {str(e)}")
 
 
 if __name__ == "__main__":
     import uvicorn
-    
-    uvicorn.run(
-        "app.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.reload,
-        log_level=settings.log_level.lower()
-    ) 
+    uvicorn.run(app, host="0.0.0.0", port=settings.port) 

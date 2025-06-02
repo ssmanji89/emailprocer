@@ -10,13 +10,19 @@ import {
   AlertTriangle, 
   Settings, 
   Home,
-  Activity
+  Activity,
+  TrendingUp,
+  Target,
+  Brain
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Processing', href: '/analytics/processing', icon: Activity },
   { name: 'Classification', href: '/analytics/classification', icon: BarChart3 },
+  { name: 'Trend Analysis', href: '/analytics/trends', icon: TrendingUp },
+  { name: 'Performance Insights', href: '/analytics/insights', icon: Target },
+  { name: 'Predictive Analytics', href: '/analytics/predictions', icon: Brain },
   { name: 'Patterns', href: '/patterns', icon: FileText },
   { name: 'Escalations', href: '/escalations', icon: AlertTriangle },
   { name: 'Email History', href: '/analytics/emails', icon: Mail },

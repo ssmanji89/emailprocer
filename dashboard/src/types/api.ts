@@ -218,4 +218,181 @@ export interface NavigationItem {
   label: string;
   icon: string;
   active?: boolean;
+}
+
+// Phase 6 Types - Advanced Analytics & Intelligence
+
+// Trend Analysis Types
+export interface TrendAnalytics {
+  period_start: string;
+  period_end: string;
+  volume_trends: Array<{
+    date: string;
+    emails_received: number;
+    emails_processed: number;
+    processing_rate: number;
+    avg_processing_time_ms: number;
+  }>;
+  seasonal_patterns: Array<{
+    hour_of_day: number;
+    avg_volume: number;
+    peak_indicator: boolean;
+  }>;
+  category_trends: Array<{
+    category: string;
+    trend_data: Array<{
+      date: string;
+      count: number;
+      growth_rate: number;
+    }>;
+  }>;
+  performance_trends: Array<{
+    date: string;
+    success_rate: number;
+    escalation_rate: number;
+    avg_confidence: number;
+    human_feedback_score: number;
+  }>;
+  forecasting: {
+    next_7_days: Array<{
+      date: string;
+      predicted_volume: number;
+      confidence_interval: {
+        lower: number;
+        upper: number;
+      };
+    }>;
+    next_30_days_summary: {
+      predicted_total: number;
+      growth_rate: number;
+      seasonal_factor: number;
+    };
+  };
+}
+
+export interface TrendParams {
+  period?: '7d' | '30d' | '90d' | '6m' | '1y';
+  granularity?: 'hour' | 'day' | 'week' | 'month';
+  categories?: string[];
+  include_forecast?: boolean;
+  include_seasonality?: boolean;
+}
+
+// Performance Insights Types
+export interface PerformanceInsights {
+  efficiency_metrics: {
+    overall_score: number;
+    processing_efficiency: number;
+    classification_accuracy: number;
+    automation_rate: number;
+    response_time_score: number;
+  };
+  bottlenecks: Array<{
+    bottleneck_type: 'processing' | 'classification' | 'escalation' | 'team_capacity';
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    description: string;
+    impact_score: number;
+    affected_volume: number;
+    recommendations: string[];
+  }>;
+  optimization_opportunities: Array<{
+    opportunity_id: string;
+    type: 'automation' | 'process_improvement' | 'resource_allocation';
+    title: string;
+    description: string;
+    potential_savings_hours: number;
+    implementation_effort: 'low' | 'medium' | 'high';
+    roi_score: number;
+  }>;
+  team_insights: Array<{
+    team_id: string;
+    team_name: string;
+    efficiency_score: number;
+    workload_balance: number;
+    skill_utilization: number;
+    recommendations: string[];
+  }>;
+}
+
+// Predictive Analytics Types
+export interface PredictiveAnalytics {
+  volume_predictions: {
+    short_term: Array<{
+      date: string;
+      predicted_volume: number;
+      confidence: number;
+      factors: string[];
+    }>;
+    long_term: Array<{
+      month: string;
+      predicted_volume: number;
+      trend_direction: 'up' | 'down' | 'stable';
+      seasonal_adjustment: number;
+    }>;
+  };
+  escalation_predictions: Array<{
+    date: string;
+    predicted_escalations: number;
+    risk_factors: Array<{
+      factor: string;
+      impact_score: number;
+    }>;
+    prevention_recommendations: string[];
+  }>;
+  capacity_planning: {
+    current_capacity: number;
+    predicted_demand: number;
+    capacity_gap: number;
+    recommended_team_size: number;
+    timeline_recommendations: Array<{
+      period: string;
+      action: string;
+      priority: 'low' | 'medium' | 'high';
+    }>;
+  };
+  pattern_evolution: Array<{
+    pattern_type: string;
+    trend_direction: 'emerging' | 'stable' | 'declining';
+    confidence: number;
+    impact_assessment: string;
+    adaptation_suggestions: string[];
+  }>;
+}
+
+// Custom Reports Types
+export interface CustomReport {
+  report_id: string;
+  name: string;
+  description: string;
+  created_by: string;
+  created_at: string;
+  last_run: string;
+  schedule?: {
+    frequency: 'daily' | 'weekly' | 'monthly';
+    time: string;
+    recipients: string[];
+  };
+  config: {
+    metrics: string[];
+    filters: Record<string, any>;
+    chart_types: string[];
+    date_range: string;
+  };
+}
+
+export interface ReportData {
+  report_id: string;
+  generated_at: string;
+  data: Record<string, any>;
+  charts: Array<{
+    chart_id: string;
+    type: string;
+    title: string;
+    data: any[];
+  }>;
+  summary: {
+    key_insights: string[];
+    recommendations: string[];
+    alerts: string[];
+  };
 } 

@@ -55,7 +55,7 @@ export function EscalationDetailModal({
     notes: '',
   })
 
-  const { data: escalationDetail, isLoading: detailLoading } = useQuery({
+  const { isLoading: detailLoading } = useQuery({
     queryKey: ['escalation-detail', escalation.escalation_id],
     queryFn: () => apiClient.getEscalationDetails(escalation.escalation_id),
     enabled: isOpen,
@@ -365,7 +365,7 @@ export function EscalationDetailModal({
                     <div className="flex items-center gap-2">
                       <select
                         value={newPriority}
-                        onChange={(e) => setNewPriority(e.target.value as any)}
+                        onChange={(e) => setNewPriority(e.target.value as 'low' | 'medium' | 'high' | 'critical')}
                         className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
                         <option value="low">Low</option>

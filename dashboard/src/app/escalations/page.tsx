@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button'
 import { EscalationsGrid } from '@/components/dashboard/escalations-grid'
 import { SLAAlerts } from '@/components/alerts/sla-alerts'
 import { TeamWorkloadChart } from '@/components/charts/team-workload-chart'
-// import { EscalationDetailModal } from '@/components/modals/escalation-detail-modal'
+import { EscalationDetailModal } from '@/components/modals/escalation-detail-modal'
 import { apiClient } from '@/lib/api-client'
-// import { Escalation } from '@/types/api'
+import { Escalation } from '@/types/api'
 import { formatNumber, formatDuration } from '@/lib/utils'
 import { 
   AlertTriangle, 
@@ -20,8 +20,8 @@ import {
 } from 'lucide-react'
 
 export default function EscalationsPage() {
-  // const [selectedEscalation, setSelectedEscalation] = useState<Escalation | null>(null)
-  // const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [selectedEscalation, setSelectedEscalation] = useState<Escalation | null>(null)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
 
@@ -37,10 +37,10 @@ export default function EscalationsPage() {
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
-  // const handleEscalationSelect = (escalation: Escalation) => {
-  //   setSelectedEscalation(escalation)
-  //   setIsDetailModalOpen(true)
-  // }
+  const handleEscalationSelect = (escalation: Escalation) => {
+    setSelectedEscalation(escalation)
+    setIsDetailModalOpen(true)
+  }
 
   const summaryStats = useMemo(() => {
     if (!escalations) return null
@@ -272,14 +272,14 @@ export default function EscalationsPage() {
           <EscalationsGrid
             escalations={filteredEscalations}
             isLoading={isLoading}
-            onEscalationSelect={() => {}}
+            onEscalationSelect={handleEscalationSelect}
             onRefetch={refetch}
           />
         </CardContent>
       </Card>
 
       {/* Escalation Detail Modal */}
-      {/* {selectedEscalation && (
+      {selectedEscalation && (
         <EscalationDetailModal
           isOpen={isDetailModalOpen}
           onClose={() => {
@@ -289,7 +289,7 @@ export default function EscalationsPage() {
           escalation={selectedEscalation}
           onRefetch={refetch}
         />
-      )} */}
+      )}
     </div>
   )
 } 
