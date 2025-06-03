@@ -1,0 +1,101 @@
+repos:
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: detect-private-key
+      - id: detect-aws-credentials
+
+  # Secret detection
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: |
+          (?x)^(
+            package-lock\.json|
+            .*\.lock|
+            .*\.min\.js|
+            .*\.min\.css
+          )$
+
+  # Python code formatting and linting
+  - repo: https://github.com/psf/black
+    rev: 23.1.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=88]
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=88, --extend-ignore=E203,W503]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: [--profile=black]
+
+  # Python type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.0.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+        exclude: ^(docs/|tests/test_)
+
+  # Security linting for Python
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.4
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        exclude: ^tests/
+
+  # Custom security checks
+  - repo: local
+    hooks:
+      - id: check-env-files
+        name: Check for real credentials in env files
+        entry: bash -c 'if grep -r "sk-proj-[a-zA-Z0-9]" --include="*.env*" .; then echo "Real API keys found in env files!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        
+      - id: check-email-addresses
+        name: Check for real email addresses
+        entry: bash -c 'if grep -r "@zgcompanies\.com\|smanji@" --exclude-dir=.git .; then echo "Real email addresses found!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        
+      - id: check-sensitive-patterns
+        name: Check for sensitive patterns
+        entry: bash -c 'if grep -r "password.*=.*[a-zA-Z0-9]{8,}\|secret.*=.*[a-zA-Z0-9]{20,}" --exclude-dir=.git --exclude="*.example" --exclude="CONTRIBUTING.md" .; then echo "Potential credentials found!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+  # Frontend hooks (if applicable)
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.36.0
+    hooks:
+      - id: eslint
+        files: \.(js|jsx|ts|tsx)$
+        types: [file]
+        exclude: ^dashboard/node_modules/
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.0.0-alpha.6
+    hooks:
+      - id: prettier
+        files: \.(js|jsx|ts|tsx|json|css|md)$
+        exclude: ^dashboard/node_modules/ 

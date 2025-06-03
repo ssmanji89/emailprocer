@@ -75,22 +75,27 @@ graph TB
 ### 1. Clone and Setup
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/yourusername/emailprocer.git
 cd emailprocer
-cp env.template .env
-# Edit .env with your configuration
+cp env.example .env
+cp test.env.example test.env
+# Edit .env with your configuration (see SETUP.md for details)
 ```
 
 ### 2. Configure Environment
 
+**See [SETUP.md](SETUP.md) for detailed configuration instructions.**
+
+Quick configuration example:
 ```bash
-# Required Environment Variables
+# Required Environment Variables (replace with your actual values)
 POSTGRES_PASSWORD=your_secure_password
 REDIS_PASSWORD=your_redis_password
 OPENAI_API_KEY=your_openai_api_key
 M365_TENANT_ID=your_tenant_id
 M365_CLIENT_ID=your_client_id
 M365_CLIENT_SECRET=your_client_secret
+EMAILBOT_TARGET_MAILBOX=your-email@your-domain.com
 MASTER_ENCRYPTION_KEY=your_32_byte_key
 JWT_SECRET_KEY=your_jwt_secret
 ```
@@ -98,18 +103,21 @@ JWT_SECRET_KEY=your_jwt_secret
 ### 3. Deploy with Docker
 
 ```bash
-# Full production deployment
-./scripts/deploy_production.sh --backup --migrate --validate
-
-# Or simple development setup
+# Start all services with Docker
 docker-compose up -d
+
+# Check service status
+docker-compose ps
+
+# View logs
+docker-compose logs -f emailbot
 ```
 
 ### 4. Create Admin API Key
 
 ```bash
 python scripts/operational_tools.py generate-api-key \
-  --user-id "admin@company.com" \
+  --user-id "admin@your-domain.com" \
   --role "admin" \
   --expires-days 365
 ```
@@ -118,9 +126,8 @@ python scripts/operational_tools.py generate-api-key \
 
 - **EmailBot API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
-- **Grafana Dashboard**: http://localhost:3000 (admin/password)
+- **Grafana Dashboard**: http://localhost:3000 (admin/your_grafana_password)
 - **Prometheus Metrics**: http://localhost:9090
-- **Kibana Logs**: http://localhost:5601
 
 ## 📋 API Reference
 
@@ -275,175 +282,131 @@ python scripts/operational_tools.py cleanup
 ### Running Tests
 
 ```bash
-# Phase 1: Basic functionality
-python test_phase1.py
+# Run all tests
+python -m pytest
 
-# Phase 2: Isolated component tests
-python test_phase2_isolated.py
+# Run with coverage
+python -m pytest --cov=app
 
-# Phase 3: Integration tests
-python test_phase3_integration.py
-
-# Phase 4: Database tests
-python test_phase4_database.py
-
-# All tests
-pytest tests/ -v --cov=app
+# Run specific test phases
+python test_phase1.py  # Basic functionality
+python test_phase2.py  # Security features
+python test_phase3_integration.py  # Integration tests
+python test_phase4_database.py  # Database operations
 ```
 
-### Test Coverage
-
-- **Unit Tests**: 95%+ coverage for core modules
-- **Integration Tests**: Full workflow testing
-- **Security Tests**: Penetration testing scenarios
-- **Performance Tests**: Load and stress testing
-- **API Tests**: Complete endpoint validation
-
-## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
-| `REDIS_URL` | Redis connection string | Yes | - |
-| `OPENAI_API_KEY` | OpenAI API key | Yes | - |
-| `M365_TENANT_ID` | Microsoft 365 tenant ID | Yes | - |
-| `M365_CLIENT_ID` | Azure app client ID | Yes | - |
-| `M365_CLIENT_SECRET` | Azure app client secret | Yes | - |
-| `MASTER_ENCRYPTION_KEY` | Master encryption key | Yes | - |
-| `JWT_SECRET_KEY` | JWT signing key | Yes | - |
-| `LOG_LEVEL` | Logging level | No | INFO |
-| `ALERT_WEBHOOK_URL` | Webhook for alerts | No | - |
-
-### Application Settings
-
-See `app/config/settings.py` for detailed configuration options:
-
-- **Processing settings** (batch sizes, timeouts)
-- **Security settings** (encryption, authentication)
-- **Monitoring settings** (metrics, alerts)
-- **Performance settings** (caching, rate limits)
-
-## 📈 Performance
-
-### Benchmarks
-
-- **Email Processing**: 1000+ emails/hour
-- **Classification Accuracy**: 95%+ (with feedback loop)
-- **API Response Time**: <100ms (p95)
-- **System Uptime**: 99.9%+
-- **Data Encryption**: <5ms overhead
-
-### Optimization
-
-- **Async processing** pipeline for high throughput
-- **Redis caching** for frequently accessed data
-- **Database indexing** for query optimization
-- **Connection pooling** for efficient resource usage
-- **Load balancing** support for horizontal scaling
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### Authentication Errors
-```bash
-# Check M365 permissions
-python scripts/operational_tools.py system-diagnostics
-
-# Test API connectivity
-curl -f http://localhost:8000/health
-```
-
-#### Performance Issues
-```bash
-# Check system resources
-python scripts/operational_tools.py health-check --detailed
-
-# Review performance metrics
-curl http://localhost:8000/monitoring/metrics
-```
-
-#### Database Issues
-```bash
-# Check database connectivity
-docker exec emailbot-postgres pg_isready -U emailbot
-
-# Review slow queries
-python scripts/operational_tools.py performance-report
-```
-
-### Log Analysis
+### Performance Testing
 
 ```bash
-# View application logs
-docker logs emailbot-app
+# Load testing with K6
+k6 run tests/performance/load-test.js
 
-# Search logs with patterns
-grep "ERROR" logs/emailbot.log
+# Database performance
+python scripts/performance_test.py --database
 
-# Structured log analysis
-tail -f logs/emailbot.log | jq
+# API endpoint testing
+python scripts/performance_test.py --api
 ```
+
+## 📚 Documentation
+
+### User Guides
+- **[Setup Guide](SETUP.md)** - Complete development environment setup
+- **[API Documentation](http://localhost:8000/docs)** - Interactive API docs
+- **[Security Policy](SECURITY.md)** - Security guidelines and reporting
+- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
+
+### Developer Documentation
+- **Architecture Overview** - System design and patterns
+- **Integration Guides** - Microsoft 365 and Teams setup
+- **Deployment Guide** - Production deployment instructions
+- **Troubleshooting** - Common issues and solutions
 
 ## 🤝 Contributing
 
-### Development Setup
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details on:
+
+- Setting up your development environment
+- Code style and standards
+- Testing requirements
+- Pull request process
+- Security guidelines
+
+### Quick Start for Contributors
 
 ```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate
+# Fork the repository and clone your fork
+git clone https://github.com/yourusername/emailprocer.git
+cd emailprocer
 
-# Install dependencies
+# Set up development environment
+cp env.example .env
 pip install -r requirements.txt
-
-# Install development tools
 pip install -r requirements-dev.txt
 
-# Setup pre-commit hooks
+# Install pre-commit hooks
 pre-commit install
+
+# Run tests
+python -m pytest
 ```
 
-### Code Standards
-
-- **Python**: Black formatting, flake8 linting
-- **Type hints**: MyPy static type checking
-- **Testing**: Pytest with 95%+ coverage
-- **Documentation**: Google-style docstrings
-- **Git**: Conventional commit messages
-
-### Submission Process
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## 📜 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## 🆘 Support
 
-- **OpenAI** for GPT-4 API
-- **Microsoft** for M365 Graph API
-- **FastAPI** team for the excellent framework
-- **PostgreSQL** and **Redis** communities
-- **Docker** for containerization platform
+### Getting Help
+- **Documentation**: Check our comprehensive documentation
+- **Issues**: Report bugs and request features on GitHub
+- **Discussions**: Join our community discussions
+- **Security**: Report security issues to security@emailbot-project.org
 
-## 📞 Support
+### Community
+- **GitHub Discussions**: Ask questions and share ideas
+- **Issue Tracker**: Report bugs and request features
+- **Security Reports**: Responsible disclosure process
 
-For support and questions:
+## 🔧 System Requirements
 
-- **Documentation**: [docs/](docs/)
-- **Issues**: GitHub Issues
-- **Email**: support@company.com
-- **Slack**: #emailbot-support
+### Minimum Requirements
+- **Python**: 3.11 or higher
+- **Node.js**: 18 or higher (for frontend)
+- **Memory**: 4GB RAM minimum, 8GB recommended
+- **Storage**: 20GB free space
+- **Network**: Internet access for API calls
+
+### Production Requirements
+- **CPU**: 4+ cores recommended
+- **Memory**: 16GB+ RAM for production workloads
+- **Storage**: SSD storage recommended
+- **Database**: PostgreSQL 15+ with proper sizing
+- **Monitoring**: Prometheus + Grafana stack
+
+## 🌟 Features
+
+### Core Functionality
+- ✅ **AI Email Classification** - GPT-4 powered intelligent categorization
+- ✅ **Team Assignment** - Automated workload distribution
+- ✅ **Real-time Updates** - WebSocket-based live notifications
+- ✅ **SLA Monitoring** - Proactive SLA breach detection
+- ✅ **Analytics Dashboard** - Comprehensive performance metrics
+
+### Integration Features
+- ✅ **Microsoft 365** - Full email and calendar integration
+- ✅ **Microsoft Teams** - Automated team creation and management
+- ✅ **Export Systems** - PDF, CSV, XLSX report generation
+- ✅ **Webhook Support** - External system notifications
+- ✅ **API Access** - RESTful API for all operations
+
+### Enterprise Features
+- ✅ **Role-based Access** - Granular permission system
+- ✅ **Audit Logging** - Comprehensive activity tracking
+- ✅ **Data Encryption** - End-to-end security
+- ✅ **Compliance Ready** - GDPR, SOC2 support
+- ✅ **High Availability** - Scalable architecture
 
 ---
 
-**EmailBot** - Intelligent Email Processing for the Modern Enterprise  
-Built with ❤️ for IT Operations Teams 
+**EmailBot** - Transforming email management with AI-powered intelligence and enterprise-grade reliability. 

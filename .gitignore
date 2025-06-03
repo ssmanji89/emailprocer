@@ -44,6 +44,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+test_.py
 
 # Virtual environments
 .env
@@ -89,4 +90,136 @@ temp/
 dump.rdb
 
 # Jupyter Notebooks
-.ipynb_checkpoints 
+.ipynb_checkpoints
+
+# ============================================================================
+# SENSITIVE DATA EXCLUSIONS FOR PUBLIC REPOSITORY
+# ============================================================================
+
+# Environment files with real credentials
+.env.development
+.env.test
+.env.staging
+test.env
+test_local.env
+test*.env
+local*.env
+dev*.env
+prod*.env
+staging*.env
+*.env.local
+
+# Real environment files (keep local only)
+.env.real
+.env.actual
+.env.live
+*.env.backup
+
+# API Keys and Credentials
+**/api-keys/
+**/secrets/
+**/credentials/
+credentials.json
+service-account.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cert
+*.keystore
+*.jks
+
+# Company/Personal Specific Files
+config/personal/
+config/local/
+config/company/
+config/zgcompanies/
+personal_*.py
+company_*.py
+local_*.py
+zgcompanies_*.py
+
+# Development and Testing Data with Real Info
+data/personal/
+data/test/
+data/local/
+data/real/
+test_data/real/
+mock_data/real/
+sample_emails/real/
+demo_data/real/
+
+# Documentation with Sensitive Info
+docs/personal/
+docs/internal/
+docs/company/
+docs/zgcompanies/
+docs/NEXT_SESSION_PROMPT.md
+docs/SESSION_HANDOFF.md
+INTERNAL_*.md
+COMPANY_*.md
+PERSONAL_*.md
+ZGCOMPANIES_*.md
+
+# Test Results with Real Data
+*_test_results_real.json
+*_results_actual.json
+phase*_test_results.json
+
+# Backup and Archive Files
+*.backup
+*.bak
+archive/
+backups/
+old/
+real_*/
+
+# Local Development Tools
+.cursor/
+.vscode/settings.json
+.idea/workspace.xml
+.idea/tasks.xml
+
+# Email and Communication Data
+emails/
+mailbox/
+communication/
+messages/
+real_emails/
+
+# Security and Audit Logs
+audit/
+security/
+incidents/
+alerts/
+logs/real/
+
+# Third-party Integration Configs
+teams_config.json
+slack_config.json
+webhook_configs/
+integration_secrets/
+m365_config_real.json
+
+# Performance and Monitoring Data
+metrics/personal/
+monitoring/local/
+grafana/local/
+prometheus/local/
+
+# User-specific Configurations
+user_*.json
+personal_*.yaml
+local_*.toml
+*_personal.*
+*_local.*
+*_private.*
+*_real.*
+*_actual.*
+
+# Git-specific ignores for this project
+.git-credentials
+.gitconfig.local 
+
+security_demo.py
