@@ -1,6 +1,9 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  external_labels:
+    cluster: 'emailbot-production'
+    replica: 'prometheus-1'
 
 rule_files:
   - "alert_rules.yml"
@@ -9,32 +12,95 @@ alerting:
   alertmanagers:
     - static_configs:
         - targets:
-          # - alertmanager:9093
+          - alertmanager:9093
 
 scrape_configs:
-  - job_name: 'emailbot-app'
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # EmailBot Backend API
+  - job_name: 'emailbot-backend'
     static_configs:
       - targets: ['emailbot-app:8000']
-    metrics_path: '/metrics'
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # EmailBot Frontend Dashboard
+  - job_name: 'emailbot-frontend'
+    static_configs:
+      - targets: ['emailbot-dashboard:3000']
     scrape_interval: 30s
+    metrics_path: /api/metrics
     scrape_timeout: 10s
 
-  - job_name: 'emailbot-postgres'
+  # PostgreSQL Database
+  - job_name: 'postgres'
     static_configs:
       - targets: ['emailbot-postgres:5432']
     scrape_interval: 30s
+    metrics_path: /metrics
 
-  - job_name: 'emailbot-redis'
+  # Redis Cache
+  - job_name: 'redis'
     static_configs:
       - targets: ['emailbot-redis:6379']
     scrape_interval: 30s
+    metrics_path: /metrics
 
+  # Node Exporter (System Metrics)
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['emailbot-node-exporter:9100']
     scrape_interval: 15s
+    metrics_path: /metrics
 
-  - job_name: 'prometheus'
+  # Nginx Reverse Proxy
+  - job_name: 'nginx'
     static_configs:
-      - targets: ['localhost:9090']
-    scrape_interval: 15s 
+      - targets: ['emailbot-nginx:9113']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Custom Application Metrics
+  - job_name: 'emailbot-custom-metrics'
+    static_configs:
+      - targets: ['emailbot-app:8000']
+    scrape_interval: 15s
+    metrics_path: /api/metrics/custom
+    params:
+      module: ['emailbot']
+
+  # Health Check Endpoints
+  - job_name: 'emailbot-health'
+    static_configs:
+      - targets: 
+        - 'emailbot-app:8000'
+        - 'emailbot-dashboard:3000'
+    scrape_interval: 10s
+    metrics_path: /health
+    params:
+      format: ['prometheus']
+
+# Remote write configuration for long-term storage
+remote_write:
+  - url: "http://victoriametrics:8428/api/v1/write"
+    queue_config:
+      max_samples_per_send: 10000
+      batch_send_deadline: 5s
+      max_shards: 200
+      min_shards: 1
+      max_backoff: 30s
+      min_backoff: 100ms
+
+# Remote read configuration
+remote_read:
+  - url: "http://victoriametrics:8428/api/v1/read"
+    read_recent: true 

@@ -1,6 +1,29 @@
 version: '3.8'
 
 services:
+  # Frontend Dashboard
+  emailbot-dashboard:
+    build: 
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: emailbot-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://emailbot-app:8000
+      - NEXT_PUBLIC_WS_URL=ws://emailbot-app:8000
+      - NEXT_TELEMETRY_DISABLED=1
+    depends_on:
+      - emailbot-app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   emailbot-app:
     build: .
     container_name: emailbot-app

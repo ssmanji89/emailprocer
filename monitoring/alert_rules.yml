@@ -1,0 +1,229 @@
+groups:
+  - name: emailbot.rules
+    rules:
+      # High-level service availability alerts
+      - alert: EmailBotServiceDown
+        expr: up{job=~"emailbot-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: emailbot
+        annotations:
+          summary: "EmailBot service {{ $labels.job }} is down"
+          description: "EmailBot service {{ $labels.job }} has been down for more than 1 minute."
+
+      - alert: EmailBotHighErrorRate
+        expr: rate(http_requests_total{job="emailbot-backend",status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: emailbot
+        annotations:
+          summary: "High error rate detected in EmailBot backend"
+          description: "EmailBot backend error rate is {{ $value }} errors per second over the last 5 minutes."
+
+      # Performance alerts
+      - alert: EmailBotHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="emailbot-backend"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: emailbot
+        annotations:
+          summary: "EmailBot high response time"
+          description: "95th percentile response time is {{ $value }}s, which is above the 2s threshold."
+
+      - alert: EmailBotHighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="emailbot-backend"}[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: emailbot
+        annotations:
+          summary: "EmailBot high CPU usage"
+          description: "EmailBot backend CPU usage is {{ $value }}% for more than 10 minutes."
+
+      - alert: EmailBotHighMemoryUsage
+        expr: process_resident_memory_bytes{job="emailbot-backend"} / 1024 / 1024 / 1024 > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: emailbot
+        annotations:
+          summary: "EmailBot high memory usage"
+          description: "EmailBot backend memory usage is {{ $value }}GB, which is above the 2GB threshold."
+
+      # Database alerts
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL database has been down for more than 1 minute."
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL connection usage is {{ $value }}% of maximum connections."
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_database_tup_fetched[5m]) / rate(pg_stat_database_tup_returned[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "PostgreSQL query efficiency is {{ $value }}, indicating slow queries."
+
+      # Redis alerts
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis cache has been down for more than 1 minute."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value }}% of maximum memory."
+
+      - alert: RedisHighConnectionCount
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "Redis high connection count"
+          description: "Redis has {{ $value }} connected clients, which is above the 100 threshold."
+
+      # Email processing alerts
+      - alert: EmailProcessingBacklog
+        expr: emailbot_email_queue_size > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: emailbot
+          component: processing
+        annotations:
+          summary: "Email processing backlog detected"
+          description: "Email queue size is {{ $value }}, indicating a processing backlog."
+
+      - alert: EmailProcessingFailureRate
+        expr: rate(emailbot_email_processing_failures_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: emailbot
+          component: processing
+        annotations:
+          summary: "High email processing failure rate"
+          description: "Email processing failure rate is {{ $value }} failures per second."
+
+      - alert: EmailClassificationAccuracyLow
+        expr: emailbot_classification_accuracy < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: emailbot
+          component: ai
+        annotations:
+          summary: "Email classification accuracy is low"
+          description: "Email classification accuracy is {{ $value }}, which is below the 80% threshold."
+
+      # SLA and escalation alerts
+      - alert: SLABreachRisk
+        expr: emailbot_sla_breach_risk_score > 0.8
+        for: 1m
+        labels:
+          severity: warning
+          service: emailbot
+          component: sla
+        annotations:
+          summary: "SLA breach risk detected"
+          description: "SLA breach risk score is {{ $value }}, indicating potential SLA violations."
+
+      - alert: EscalationBacklog
+        expr: emailbot_escalation_queue_size > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: emailbot
+          component: escalation
+        annotations:
+          summary: "Escalation backlog detected"
+          description: "Escalation queue size is {{ $value }}, indicating a backlog in escalation processing."
+
+      # Microsoft Teams integration alerts
+      - alert: TeamsIntegrationFailure
+        expr: rate(emailbot_teams_api_failures_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: emailbot
+          component: teams
+        annotations:
+          summary: "Microsoft Teams integration failures"
+          description: "Teams API failure rate is {{ $value }} failures per second."
+
+      # System resource alerts
+      - alert: DiskSpaceHigh
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk space usage"
+          description: "Disk space usage is {{ $value }}% on {{ $labels.device }}."
+
+      - alert: SystemLoadHigh
+        expr: node_load1 > 4
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High system load"
+          description: "System load is {{ $value }}, which is above the threshold of 4."
+
+      # Security alerts
+      - alert: UnauthorizedAccessAttempts
+        expr: rate(emailbot_unauthorized_access_attempts_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          service: emailbot
+          component: security
+        annotations:
+          summary: "Unauthorized access attempts detected"
+          description: "Unauthorized access attempt rate is {{ $value }} attempts per second."
+
+      - alert: SecurityScanFailures
+        expr: emailbot_security_scan_failures_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: emailbot
+          component: security
+        annotations:
+          summary: "Security scan failures detected"
+          description: "{{ $value }} security scan failures have been detected." 
